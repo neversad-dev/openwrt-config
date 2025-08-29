@@ -1,4 +1,8 @@
 name: Build OpenWRT Images for Multiple Devices
+# 
+# This workflow builds OpenWRT images for multiple router devices.
+# It includes automatic hash updates to handle frequently changing OpenWRT packages.
+# Hash mismatches are handled gracefully with fallback build strategies.
 
 on:
   push:
@@ -85,10 +89,36 @@ jobs:
           df -h
           free -h
 
+      - name: Update OpenWRT ImageBuilder hashes
+        run: |
+          echo "=== Updating OpenWRT ImageBuilder hashes ==="
+          
+          # Try to get the latest release version and update hashes
+          if LATEST_RELEASE=$(nix eval --raw inputs.openwrt-imagebuilder#latest-release 2>/dev/null); then
+            echo "Latest OpenWRT release: $LATEST_RELEASE"
+            
+            echo "Updating hashes for release $LATEST_RELEASE..."
+            if nix run inputs.openwrt-imagebuilder#generate-hashes -- "$LATEST_RELEASE" 2>/dev/null; then
+              echo "✅ Hash update completed successfully"
+            else
+              echo "⚠️  Hash update failed, but continuing with build (may use cached hashes)"
+            fi
+          else
+            echo "⚠️  Could not determine latest release, continuing with existing hashes"
+          fi
+
       - name: Build OpenWRT image for ${{ matrix.device }}
         run: |
           echo "=== Building OpenWRT image for ${{ matrix.device }} ==="
-          nix build .#${{ matrix.device }} --print-build-logs --verbose
+          
+          # First try normal build
+          if ! nix build .#${{ matrix.device }} --print-build-logs --verbose; then
+            echo "❌ Build failed, possibly due to hash mismatch"
+            echo "🔄 Attempting build with fresh openwrt-imagebuilder input..."
+            
+            # Try building with a fresh input (this refetches the imagebuilder)
+            nix build .#${{ matrix.device }} --print-build-logs --verbose --refresh
+          fi
 
       - name: Prepare artifacts for ${{ matrix.device }}
         run: |
