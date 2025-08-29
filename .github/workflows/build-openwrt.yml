@@ -92,14 +92,14 @@ jobs:
       - name: Update OpenWRT ImageBuilder hashes
         run: |
           echo "=== Updating OpenWRT ImageBuilder hashes ==="
-          
+
           # Update flake inputs to get latest versions  
           echo "Updating flake lock file..."
           nix flake update 2>/dev/null || echo "Failed to update flake lock, continuing..."
-          
+
           # Try multiple approaches to get the latest release and update hashes
           HASH_UPDATE_SUCCESS=false
-          
+
           # Method 1: Try with direct flake reference
           if LATEST_RELEASE=$(nix eval github:astro/nix-openwrt-imagebuilder#latest-release --raw 2>/dev/null); then
             echo "Latest OpenWRT release: $LATEST_RELEASE"
@@ -109,7 +109,7 @@ jobs:
               HASH_UPDATE_SUCCESS=true
             fi
           fi
-          
+
           # Method 2: Try with our flake's input reference  
           if [ "$HASH_UPDATE_SUCCESS" = false ]; then
             echo "Trying alternative hash update method..."
@@ -121,7 +121,7 @@ jobs:
               fi
             fi
           fi
-          
+
           # Method 3: Use a fixed recent version if dynamic detection fails
           if [ "$HASH_UPDATE_SUCCESS" = false ]; then
             echo "Trying with recent OpenWRT version..."
@@ -134,7 +134,7 @@ jobs:
               fi
             done
           fi
-          
+
           if [ "$HASH_UPDATE_SUCCESS" = false ]; then
             echo "⚠️  All hash update methods failed, continuing with existing hashes"
             echo "This may cause hash mismatch errors during build"
@@ -233,11 +233,21 @@ jobs:
             echo "Note: Build completed but no output files were found" >> artifacts/device-info.txt
           fi
 
+      - name: Set artifact name
+        run: |
+          # Create a clean artifact name without special characters
+          DEVICE_NAME="${{ matrix.device }}"
+          SHORT_SHA="${{ github.sha }}"
+          SHORT_SHA="${SHORT_SHA:0:8}"
+          ARTIFACT_NAME="${DEVICE_NAME}-openwrt-images-${SHORT_SHA}"
+          echo "ARTIFACT_NAME=${ARTIFACT_NAME}" >> $GITHUB_ENV
+          echo "Artifact name: ${ARTIFACT_NAME}"
+
       - name: Upload build artifacts for ${{ matrix.device }}
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ matrix.device }}-openwrt-images-${{ github.sha }}
+          name: ${{ env.ARTIFACT_NAME }}
           path: artifacts/
           retention-days: 30
           compression-level: 6
