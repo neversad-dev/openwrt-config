@@ -7,9 +7,8 @@
   name = "xiaomi-r3g";
   description = "Xiaomi Mi WiFi R3G v1 - MediaTek MT7621";
 
-  # Hardware target for Xiaomi Mi WiFi R3G v1
-  target = "ramips";
-  variant = "mt7621";
+  # Hardware profile for OpenWRT ImageBuilder  
+  profile = "xiaomi_mi-router-3g";
 
   # For other Xiaomi models, use one of these targets:
   # R3G v1: target = "ramips"; variant = "mt7621";

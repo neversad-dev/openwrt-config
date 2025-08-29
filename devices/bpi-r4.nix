@@ -7,9 +7,8 @@
   name = "bpi-r4";
   description = "BananaPi BPI-R4-8G - MediaTek Filogic MT7988A (8GB RAM, WiFi 7 BPI-R4-NIC-BE14)";
 
-  # Hardware target
-  target = "mediatek";
-  variant = "filogic";
+  # Hardware profile for OpenWRT ImageBuilder
+  profile = "bananapi_bpi-r4";
 
   # Note: This is specifically for BPI-R4-8G (8GB RAM variant)
   # The 8GB version requires different firmware than the 4GB version

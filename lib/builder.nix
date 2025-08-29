@@ -31,11 +31,12 @@ in
       find $out -type f -name "*.sh" -exec chmod +x {} \;
       find $out -type f -path "*/uci-defaults/*" -exec chmod +x {} \;
     '';
-  in
-    openwrt-imagebuilder.lib.build {
-      inherit (device) target variant;
 
+    # Build configuration object using the correct API
+    config = profiles.identifyProfile device.profile // {
       packages = allPackages;
       disabledServices = common.disabledServices;
       files = combinedFiles;
-    }
+    };
+  in
+    openwrt-imagebuilder.lib.build config
