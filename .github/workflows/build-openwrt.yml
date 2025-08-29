@@ -119,35 +119,85 @@ jobs:
             # Try building with a fresh input (this refetches the imagebuilder)
             nix build .#${{ matrix.device }} --print-build-logs --verbose --refresh
           fi
+          
+          # Debug: Show what was actually built
+          echo "=== Build completed, checking outputs ==="
+          if [ -L result ]; then
+            echo "✅ Result symlink created: $(readlink result)"
+            echo "Contents of result directory:"
+            find result -ls 2>/dev/null | head -20 || echo "Could not list result contents"
+          else
+            echo "❌ No result symlink found"
+          fi
 
       - name: Prepare artifacts for ${{ matrix.device }}
         run: |
           echo "=== Preparing build artifacts for ${{ matrix.device }} ==="
           mkdir -p artifacts
 
-          # Copy built images to artifacts directory
-          if [ -d result ]; then
-            echo "Build result directory contents:"
+          # Debug: Show current directory and files
+          echo "Current working directory: $(pwd)"
+          echo "Files in current directory:"
+          ls -la
+          
+          # Check for result directory or symlink
+          if [ -L result ]; then
+            echo "✅ Found result symlink"
+            echo "Result symlink points to: $(readlink result)"
+            echo "Listing result directory contents:"
+            find result -type f 2>/dev/null | head -20 || echo "No files found in result"
+          elif [ -d result ]; then
+            echo "✅ Found result directory"  
+            echo "Listing result directory contents:"
             find result -type f | head -20
-            
-            # Copy all files from result
-            cp -r result/* artifacts/ 2>/dev/null || true
-            
-            # List what we built
-            echo "=== Built files for ${{ matrix.device }} ==="
-            find artifacts -type f \( -name "*.bin" -o -name "*.img" -o -name "*sysupgrade*" -o -name "*factory*" \) | head -20
-            
-            # Show file sizes
-            echo "=== File sizes ==="
-            du -h artifacts/* | head -10
+          else
+            echo "❌ No result directory or symlink found"
+            echo "Available files and directories:"
+            find . -maxdepth 2 -type f -o -type d | head -20
+          fi
+
+          # Look for build outputs in various possible locations
+          FOUND_FILES=false
+          
+          # Try copying from result if it exists
+          if [ -e result ]; then
+            echo "Copying files from result..."
+            if find result -type f -exec cp {} artifacts/ \; 2>/dev/null; then
+              FOUND_FILES=true
+              echo "✅ Successfully copied files from result"
+            fi
+          fi
+          
+          # Look for .bin/.img files in current directory if result didn't work
+          if [ "$FOUND_FILES" = false ]; then
+            echo "Looking for build artifacts in current directory..."
+            for pattern in "*.bin" "*.img" "*sysupgrade*" "*factory*"; do
+              if find . -maxdepth 2 -name "$pattern" -type f -exec cp {} artifacts/ \; 2>/dev/null; then
+                FOUND_FILES=true
+                echo "✅ Found files matching $pattern"
+              fi
+            done
+          fi
+          
+          # Final check and file listing
+          if [ "$FOUND_FILES" = true ] && [ "$(ls -A artifacts 2>/dev/null)" ]; then
+            echo "=== Successfully prepared artifacts for ${{ matrix.device }} ==="
+            echo "Files in artifacts directory:"
+            find artifacts -type f -exec ls -lh {} \;
             
             # Create device info file
             echo "Device: ${{ matrix.device }}" > artifacts/device-info.txt
             echo "Built on: $(date)" >> artifacts/device-info.txt
             echo "Commit: ${{ github.sha }}" >> artifacts/device-info.txt
+            echo "Build successful: true" >> artifacts/device-info.txt
           else
-            echo "No result directory found"
-            ls -la
+            echo "⚠️  No build artifacts found to upload"
+            echo "Creating minimal info file..."
+            echo "Device: ${{ matrix.device }}" > artifacts/device-info.txt
+            echo "Built on: $(date)" >> artifacts/device-info.txt  
+            echo "Commit: ${{ github.sha }}" >> artifacts/device-info.txt
+            echo "Build successful: false" >> artifacts/device-info.txt
+            echo "Note: Build completed but no output files were found" >> artifacts/device-info.txt
           fi
 
       - name: Upload build artifacts for ${{ matrix.device }}
@@ -158,6 +208,7 @@ jobs:
           path: artifacts/
           retention-days: 30
           compression-level: 6
+          if-no-files-found: warn
 
       - name: Upload build logs for ${{ matrix.device }}
         uses: actions/upload-artifact@v4
