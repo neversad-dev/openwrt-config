@@ -1,5 +1,5 @@
 name: Build OpenWRT Images for Multiple Devices
-# 
+#
 # This workflow builds OpenWRT images for multiple router devices.
 # It includes automatic hash updates to handle frequently changing OpenWRT packages.
 # Hash mismatches are handled gracefully with fallback build strategies.
@@ -93,24 +93,57 @@ jobs:
         run: |
           echo "=== Updating OpenWRT ImageBuilder hashes ==="
           
-          # Try to get the latest release version and update hashes
-          if LATEST_RELEASE=$(nix eval --raw inputs.openwrt-imagebuilder#latest-release 2>/dev/null); then
+          # Update flake inputs to get latest versions  
+          echo "Updating flake lock file..."
+          nix flake update 2>/dev/null || echo "Failed to update flake lock, continuing..."
+          
+          # Try multiple approaches to get the latest release and update hashes
+          HASH_UPDATE_SUCCESS=false
+          
+          # Method 1: Try with direct flake reference
+          if LATEST_RELEASE=$(nix eval github:astro/nix-openwrt-imagebuilder#latest-release --raw 2>/dev/null); then
             echo "Latest OpenWRT release: $LATEST_RELEASE"
-            
             echo "Updating hashes for release $LATEST_RELEASE..."
-            if nix run inputs.openwrt-imagebuilder#generate-hashes -- "$LATEST_RELEASE" 2>/dev/null; then
-              echo "✅ Hash update completed successfully"
-            else
-              echo "⚠️  Hash update failed, but continuing with build (may use cached hashes)"
+            if nix run github:astro/nix-openwrt-imagebuilder#generate-hashes -- "$LATEST_RELEASE" 2>/dev/null; then
+              echo "✅ Hash update completed successfully (method 1)"
+              HASH_UPDATE_SUCCESS=true
             fi
-          else
-            echo "⚠️  Could not determine latest release, continuing with existing hashes"
+          fi
+          
+          # Method 2: Try with our flake's input reference  
+          if [ "$HASH_UPDATE_SUCCESS" = false ]; then
+            echo "Trying alternative hash update method..."
+            if LATEST_RELEASE=$(nix eval .#inputs.openwrt-imagebuilder.latest-release --raw 2>/dev/null); then
+              echo "Latest OpenWRT release (method 2): $LATEST_RELEASE"
+              if nix run .#inputs.openwrt-imagebuilder.generate-hashes -- "$LATEST_RELEASE" 2>/dev/null; then
+                echo "✅ Hash update completed successfully (method 2)"
+                HASH_UPDATE_SUCCESS=true
+              fi
+            fi
+          fi
+          
+          # Method 3: Use a fixed recent version if dynamic detection fails
+          if [ "$HASH_UPDATE_SUCCESS" = false ]; then
+            echo "Trying with recent OpenWRT version..."
+            for version in "24.10.2" "24.10.1" "24.10.0" "23.05.5"; do
+              echo "Attempting hash update for OpenWRT $version..."
+              if nix run github:astro/nix-openwrt-imagebuilder#generate-hashes -- "$version" 2>/dev/null; then
+                echo "✅ Hash update completed successfully for version $version"
+                HASH_UPDATE_SUCCESS=true
+                break
+              fi
+            done
+          fi
+          
+          if [ "$HASH_UPDATE_SUCCESS" = false ]; then
+            echo "⚠️  All hash update methods failed, continuing with existing hashes"
+            echo "This may cause hash mismatch errors during build"
           fi
 
       - name: Build OpenWRT image for ${{ matrix.device }}
         run: |
           echo "=== Building OpenWRT image for ${{ matrix.device }} ==="
-          
+
           # First try normal build
           if ! nix build .#${{ matrix.device }} --print-build-logs --verbose; then
             echo "❌ Build failed, possibly due to hash mismatch"
@@ -119,7 +152,7 @@ jobs:
             # Try building with a fresh input (this refetches the imagebuilder)
             nix build .#${{ matrix.device }} --print-build-logs --verbose --refresh
           fi
-          
+
           # Debug: Show what was actually built
           echo "=== Build completed, checking outputs ==="
           if [ -L result ]; then
@@ -139,7 +172,7 @@ jobs:
           echo "Current working directory: $(pwd)"
           echo "Files in current directory:"
           ls -la
-          
+
           # Check for result directory or symlink
           if [ -L result ]; then
             echo "✅ Found result symlink"
@@ -158,7 +191,7 @@ jobs:
 
           # Look for build outputs in various possible locations
           FOUND_FILES=false
-          
+
           # Try copying from result if it exists
           if [ -e result ]; then
             echo "Copying files from result..."
@@ -167,7 +200,7 @@ jobs:
               echo "✅ Successfully copied files from result"
             fi
           fi
-          
+
           # Look for .bin/.img files in current directory if result didn't work
           if [ "$FOUND_FILES" = false ]; then
             echo "Looking for build artifacts in current directory..."
@@ -178,7 +211,7 @@ jobs:
               fi
             done
           fi
-          
+
           # Final check and file listing
           if [ "$FOUND_FILES" = true ] && [ "$(ls -A artifacts 2>/dev/null)" ]; then
             echo "=== Successfully prepared artifacts for ${{ matrix.device }} ==="
