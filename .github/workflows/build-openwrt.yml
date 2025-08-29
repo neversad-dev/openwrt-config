@@ -131,10 +131,18 @@ jobs:
             echo "This may cause hash mismatch errors during build"
           fi
 
+      - name: Inspect build derivation
+        run: |
+          echo "=== Inspecting ${{ matrix.device }} derivation ==="
+          nix show-derivation .#${{ matrix.device }} 2>/dev/null | head -20 || echo "Could not show derivation"
+          
+          echo "Checking what the derivation should output:"
+          nix path-info .#${{ matrix.device }} --json 2>/dev/null | jq -r '.[] | .path' || echo "Could not get path info"
+
       - name: Build OpenWRT image for ${{ matrix.device }}
         run: |
           echo "=== Building OpenWRT image for ${{ matrix.device }} ==="
-
+          
           # First try normal build
           if ! nix build .#${{ matrix.device }} --print-build-logs --verbose; then
             echo "❌ Build failed, possibly due to hash mismatch"
@@ -165,6 +173,19 @@ jobs:
             # Check if there are any obvious OpenWRT-related files
             echo "Potential OpenWRT files:"
             find . -name "*openwrt*" -o -name "*factory*" -o -name "*sysupgrade*" 2>/dev/null | head -10
+            
+            # Check for standard OpenWRT output directories
+            echo "Checking for standard OpenWRT output directories:"
+            for dir in "bin" "bin/targets" "build_dir" "staging_dir"; do
+              if [ -d "$dir" ]; then
+                echo "Found directory: $dir"
+                find "$dir" -name "*.bin" -o -name "*.img" 2>/dev/null | head -5
+              fi
+            done
+            
+            # Check the entire Nix store path if result exists but is empty
+            echo "Checking Nix store for build outputs:"
+            find /nix/store -name "*openwrt*" -newer flake.nix 2>/dev/null | head -10 || echo "No recent OpenWRT files in Nix store"
           fi
 
       - name: Prepare artifacts for ${{ matrix.device }}
