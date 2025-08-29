@@ -95,7 +95,7 @@ jobs:
           if LATEST_RELEASE=$(nix eval github:astro/nix-openwrt-imagebuilder#latest-release --raw 2>/dev/null); then
             echo "Latest OpenWRT release: $LATEST_RELEASE"
             echo "Updating hashes for release $LATEST_RELEASE..."
-            if nix run github:astro/nix-openwrt-imagebuilder#generate-hashes -- "$LATEST_RELEASE" 2>/dev/null; then
+            if nix run github:astro/nix-openwrt-imagebuilder#generate-hashes -- "$LATEST_RELEASE"; then
               echo "✅ Hash update completed successfully (method 1)"
               HASH_UPDATE_SUCCESS=true
             fi
@@ -106,7 +106,7 @@ jobs:
             echo "Trying alternative hash update method..."
             if LATEST_RELEASE=$(nix eval .#inputs.openwrt-imagebuilder.latest-release --raw 2>/dev/null); then
               echo "Latest OpenWRT release (method 2): $LATEST_RELEASE"
-              if nix run .#inputs.openwrt-imagebuilder.generate-hashes -- "$LATEST_RELEASE" 2>/dev/null; then
+              if nix run .#inputs.openwrt-imagebuilder.generate-hashes -- "$LATEST_RELEASE"; then
                 echo "✅ Hash update completed successfully (method 2)"
                 HASH_UPDATE_SUCCESS=true
               fi
@@ -118,7 +118,7 @@ jobs:
             echo "Trying with recent OpenWRT version..."
             for version in "24.10.2" "24.10.1" "24.10.0" "23.05.5"; do
               echo "Attempting hash update for OpenWRT $version..."
-              if nix run github:astro/nix-openwrt-imagebuilder#generate-hashes -- "$version" 2>/dev/null; then
+              if nix run github:astro/nix-openwrt-imagebuilder#generate-hashes -- "$version"; then
                 echo "✅ Hash update completed successfully for version $version"
                 HASH_UPDATE_SUCCESS=true
                 break
@@ -126,7 +126,18 @@ jobs:
             done
           fi
 
-          if [ "$HASH_UPDATE_SUCCESS" = false ]; then
+          if [ "$HASH_UPDATE_SUCCESS" = true ]; then
+            echo "🔄 Rebuilding flake lock to incorporate updated hashes..."
+            nix flake update || echo "Warning: Could not update flake lock after hash update"
+            
+            echo "📋 Verifying hash update was applied..."
+            if [ -d "hashes" ]; then
+              echo "Hash directory contents:"
+              ls -la hashes/ | head -5
+              echo "Recent hash files:"
+              find hashes -newer flake.nix 2>/dev/null | head -5 || echo "No new hash files found"
+            fi
+          else
             echo "⚠️  All hash update methods failed, continuing with existing hashes"
             echo "This may cause hash mismatch errors during build"
           fi
@@ -135,14 +146,14 @@ jobs:
         run: |
           echo "=== Inspecting ${{ matrix.device }} derivation ==="
           nix show-derivation .#${{ matrix.device }} 2>/dev/null | head -20 || echo "Could not show derivation"
-          
+
           echo "Checking what the derivation should output:"
           nix path-info .#${{ matrix.device }} --json 2>/dev/null | jq -r '.[] | .path' || echo "Could not get path info"
 
       - name: Build OpenWRT image for ${{ matrix.device }}
         run: |
           echo "=== Building OpenWRT image for ${{ matrix.device }} ==="
-          
+
           # First try normal build
           if ! nix build .#${{ matrix.device }} --print-build-logs --verbose; then
             echo "❌ Build failed, possibly due to hash mismatch"
