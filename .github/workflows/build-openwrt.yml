@@ -274,11 +274,20 @@ jobs:
             echo "Note: Build completed but no output files were found" >> artifacts/device-info.txt
           fi
 
+      - name: Set clean artifact name
+        id: artifact-name
+        run: |
+          # Clean the device name to remove any potential newlines or special characters
+          DEVICE_CLEAN=$(echo "${{ matrix.device }}" | tr -d '\n\r\t ' | sed 's/[^a-zA-Z0-9._-]//g')
+          ARTIFACT_NAME="${DEVICE_CLEAN}-openwrt-${{ github.run_number }}"
+          echo "artifact-name=${ARTIFACT_NAME}" >> $GITHUB_OUTPUT
+          echo "Clean artifact name: ${ARTIFACT_NAME}"
+
       - name: Upload build artifacts for ${{ matrix.device }}
         uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: ${{ matrix.device }}-openwrt-${{ github.run_number }}
+          name: ${{ steps.artifact-name.outputs.artifact-name }}
           path: artifacts/
           retention-days: 30
           compression-level: 6
