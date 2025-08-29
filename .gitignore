@@ -1,0 +1,43 @@
+# Nix build results
+result
+result-*
+
+# Nix development
+.direnv/
+.envrc
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+.#*
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+
+# Logs
+*.log
+nix-build.log
+
+# Local configuration (don't commit sensitive data)
+secrets/
+local.nix
+
+# Backup files
+*.bak
+*.backup
+
+# Archives and images (usually too large for git)
+*.bin
+*.img
+*.iso
+*.tar.gz
+*.zip

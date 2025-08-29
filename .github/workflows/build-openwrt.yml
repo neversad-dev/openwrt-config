@@ -1,0 +1,209 @@
+name: Build OpenWRT Images for Multiple Devices
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+  # Allow manual triggering with device selection
+  workflow_dispatch:
+    inputs:
+      devices:
+        description: "Devices to build (comma-separated: bpi-r4,xiaomi-r3g,all)"
+        required: false
+        default: "all"
+  # Weekly builds to keep up with OpenWRT updates
+  schedule:
+    - cron: "0 6 * * 1" # Monday 6 AM UTC
+
+jobs:
+  # Job to determine which devices to build
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.set-matrix.outputs.matrix }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Determine build matrix
+        id: set-matrix
+        run: |
+          # Default devices to build
+          DEVICES="bpi-r4,xiaomi-r3g"
+
+          # Override if manually triggered with specific devices
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ -n "${{ github.event.inputs.devices }}" ]; then
+            if [ "${{ github.event.inputs.devices }}" = "all" ]; then
+              DEVICES="bpi-r4,xiaomi-r3g"
+              else
+                DEVICES="${{ github.event.inputs.devices }}"
+              fi
+            fi
+
+            # Convert to JSON array for matrix
+            MATRIX=$(echo $DEVICES | jq -R -s -c 'split(",") | map(select(length > 0))')
+            echo "matrix={\"device\":$MATRIX}" >> $GITHUB_OUTPUT
+            echo "Building devices: $DEVICES"
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{fromJson(needs.prepare.outputs.matrix)}}
+      fail-fast: false # Continue building other devices if one fails
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Free up disk space
+        run: |
+          # Remove unnecessary packages to free up space for the build
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo docker image prune --all --force
+          df -h
+
+      - name: Install Nix
+        uses: DeterminateSystems/nix-installer-action@v9
+        with:
+          logger: pretty
+          log-directives: nix_installer=trace
+          backtrace: full
+
+      - name: Setup Nix Cache
+        uses: DeterminateSystems/magic-nix-cache-action@v2
+
+      - name: Show system information
+        run: |
+          echo "=== System Information ==="
+          uname -a
+          nix --version
+          df -h
+          free -h
+
+      - name: Build OpenWRT image for ${{ matrix.device }}
+        run: |
+          echo "=== Building OpenWRT image for ${{ matrix.device }} ==="
+          nix build .#${{ matrix.device }} --print-build-logs --verbose
+
+      - name: Prepare artifacts for ${{ matrix.device }}
+        run: |
+          echo "=== Preparing build artifacts for ${{ matrix.device }} ==="
+          mkdir -p artifacts
+
+          # Copy built images to artifacts directory
+          if [ -d result ]; then
+            echo "Build result directory contents:"
+            find result -type f | head -20
+            
+            # Copy all files from result
+            cp -r result/* artifacts/ 2>/dev/null || true
+            
+            # List what we built
+            echo "=== Built files for ${{ matrix.device }} ==="
+            find artifacts -type f \( -name "*.bin" -o -name "*.img" -o -name "*sysupgrade*" -o -name "*factory*" \) | head -20
+            
+            # Show file sizes
+            echo "=== File sizes ==="
+            du -h artifacts/* | head -10
+            
+            # Create device info file
+            echo "Device: ${{ matrix.device }}" > artifacts/device-info.txt
+            echo "Built on: $(date)" >> artifacts/device-info.txt
+            echo "Commit: ${{ github.sha }}" >> artifacts/device-info.txt
+          else
+            echo "No result directory found"
+            ls -la
+          fi
+
+      - name: Upload build artifacts for ${{ matrix.device }}
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: ${{ matrix.device }}-openwrt-images-${{ github.sha }}
+          path: artifacts/
+          retention-days: 30
+          compression-level: 6
+
+      - name: Upload build logs for ${{ matrix.device }}
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: ${{ matrix.device }}-build-logs-${{ github.sha }}
+          path: |
+            nix-build.log
+            *.log
+          retention-days: 7
+
+  # Job to create a release when tagged
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: all-artifacts/
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+
+          # Organize artifacts by device
+          for device_dir in all-artifacts/*-openwrt-images-*/; do
+            if [ -d "$device_dir" ]; then
+              device_name=$(basename "$device_dir" | sed 's/-openwrt-images-.*//')
+              echo "Processing $device_name artifacts from $device_dir"
+              
+              # Create device-specific directory in release assets
+              mkdir -p "release-assets/$device_name"
+              cp -r "$device_dir"* "release-assets/$device_name/" 2>/dev/null || true
+            fi
+          done
+
+          # List what we're releasing
+          echo "=== Release assets ==="
+          find release-assets -type f | sort
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: release-assets/**/*
+          tag_name: ${{ github.ref_name }}
+          name: OpenWRT Multi-Device ${{ github.ref_name }}
+          body: |
+            OpenWRT images for multiple devices
+
+            Built from commit: ${{ github.sha }}
+
+            ## Supported Devices
+
+            - **BananaPi BPI-R4-8G**: MediaTek Filogic MT7988A, 8GB RAM, WiFi 7 BPI-R4-NIC-BE14 (IP: 192.168.1.1)
+              ⚠️ **Important**: BL2 bootloader update required for 8GB RAM recognition
+            - **Xiaomi Mi WiFi R3G v1**: MediaTek MT7621 (IP: 192.168.2.1)
+
+            ## Installation
+
+            1. Download the appropriate image file for your device
+            2. Flash using bootloader, web interface, or sysupgrade
+            3. SSH access with your configured key (no password login)
+
+            ## File Types
+
+            - `*-sysupgrade.bin`: For upgrading existing OpenWRT installations
+            - `*-factory.bin`: For fresh installations
+            - `device-info.txt`: Build information for each device
+
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
