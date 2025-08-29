@@ -161,6 +161,19 @@ jobs:
             find result -ls 2>/dev/null | head -20 || echo "Could not list result contents"
           else
             echo "❌ No result symlink found"
+            echo "Checking if build outputs are in other locations..."
+            
+            # Check what the nix-build might have created
+            echo "All files created during build:"
+            find . -newer flake.nix -type f 2>/dev/null | head -20
+            
+            # Look for any directories that might contain build outputs
+            echo "New directories:"
+            find . -newer flake.nix -type d 2>/dev/null | head -10
+            
+            # Check if there are any obvious OpenWRT-related files
+            echo "Potential OpenWRT files:"
+            find . -name "*openwrt*" -o -name "*factory*" -o -name "*sysupgrade*" 2>/dev/null | head -10
           fi
 
       - name: Prepare artifacts for ${{ matrix.device }}
@@ -205,11 +218,48 @@ jobs:
           if [ "$FOUND_FILES" = false ]; then
             echo "Looking for build artifacts in current directory..."
             for pattern in "*.bin" "*.img" "*sysupgrade*" "*factory*"; do
-              if find . -maxdepth 2 -name "$pattern" -type f -exec cp {} artifacts/ \; 2>/dev/null; then
-                FOUND_FILES=true
-                echo "✅ Found files matching $pattern"
+              echo "Searching for pattern: $pattern"
+              MATCHING_FILES=$(find . -maxdepth 3 -name "$pattern" -type f 2>/dev/null)
+              if [ -n "$MATCHING_FILES" ]; then
+                echo "Found files matching $pattern:"
+                echo "$MATCHING_FILES"
+                # Copy the files to artifacts
+                echo "$MATCHING_FILES" | while read -r file; do
+                  if [ -f "$file" ]; then
+                    echo "Copying: $file -> artifacts/"
+                    cp "$file" artifacts/
+                    FOUND_FILES=true
+                  fi
+                done
+                # Set found files flag if we found any
+                if [ $(echo "$MATCHING_FILES" | wc -l) -gt 0 ]; then
+                  FOUND_FILES=true
+                  echo "✅ Successfully found and copied files matching $pattern"
+                fi
+              else
+                echo "❌ No files found matching $pattern"
               fi
             done
+            
+            # Also check the hashes directory in case files are there
+            if [ -d "hashes" ]; then
+              echo "Checking hashes directory..."
+              find hashes -type f | head -10
+              for pattern in "*.bin" "*.img" "*sysupgrade*" "*factory*"; do
+                MATCHING_FILES=$(find hashes -name "$pattern" -type f 2>/dev/null)
+                if [ -n "$MATCHING_FILES" ]; then
+                  echo "Found build artifacts in hashes directory:"
+                  echo "$MATCHING_FILES"
+                  echo "$MATCHING_FILES" | while read -r file; do
+                    if [ -f "$file" ]; then
+                      echo "Copying from hashes: $file -> artifacts/"
+                      cp "$file" artifacts/
+                    fi
+                  done
+                  FOUND_FILES=true
+                fi
+              done
+            fi
           fi
 
           # Final check and file listing
