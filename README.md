@@ -18,7 +18,7 @@ This repository builds a custom OpenWrt image with:
 
 ```bash
 # Clone and build
-git clone <this-repo>
+git clone git@github.com:neversad-dev/openwrt-config.git
 cd openwrt-config
 nix build .#bpi-r4
 
@@ -29,7 +29,7 @@ ls result/
 
 ### GitHub Actions Build
 
-1. Push changes to `main` or `develop` branch
+1. Push changes to `main` branch
 2. Download artifacts from Actions tab
 3. Flash the `.bin` file to your BPI-R4
 
