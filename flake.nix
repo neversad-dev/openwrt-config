@@ -79,7 +79,7 @@
           '';
         };
     in {
-      # bpi-r4 = openwrt-imagebuilder.lib.build config;
+      bpi-r4 = openwrt-imagebuilder.lib.build config;
     });
 
     # Formatter available on all systems
