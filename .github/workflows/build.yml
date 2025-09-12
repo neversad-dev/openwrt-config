@@ -1,12 +1,18 @@
+name: Build OpenWrt Image
+
 on:
   push:
     branches:
       - main
       - develop
   pull_request:
+    branches:
+      - main
+      - develop
+  release:
+    types:
+      - created
   workflow_dispatch: # Allow manual triggering
-
-name: Build OpenWrt Image
 
 jobs:
   build:
@@ -35,3 +41,11 @@ jobs:
           name: openwrt-bpi-r4-images
           path: result/
           retention-days: 30
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v1
+        with:
+          files: result/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
