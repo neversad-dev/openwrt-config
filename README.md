@@ -51,6 +51,15 @@ To modify the configuration, edit `flake.nix` and adjust:
 **Profile**: `bananapi_bpi-r4`  
 **Architecture**: MediaTek MT7988A (ARM64)
 
+## Versioning
+
+This project uses the versioning scheme: `vOPENWRT_VERSION-CUSTOM_VERSION`
+
+- **OpenWrt Version**: Base OpenWrt release (e.g., `24.10.2`)
+- **Custom Version**: Our configuration version (e.g., `1.0.0`)
+
+Example: `v24.10.2-1.0.0` = OpenWrt 24.10.2 with our custom config v1.0.0
+
 ## Links
 
 - [Banana Pi R4 Wiki](https://openwrt.org/toh/sinovoip/bananapi_bpi-r4)

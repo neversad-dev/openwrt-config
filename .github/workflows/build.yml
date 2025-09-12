@@ -46,6 +46,12 @@ jobs:
         if: github.event_name == 'release'
         uses: softprops/action-gh-release@v1
         with:
-          files: result/*
+          files: |
+            result/*-sysupgrade.itb
+            result/*-sdcard.img.gz
+            result/*-preloader.bin
+            result/*-bl31-uboot.fip
+            result/sha256sums
+            result/*.manifest
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
