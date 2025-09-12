@@ -8,9 +8,17 @@
     nixpkgs,
     openwrt-imagebuilder,
     ...
-  }: {
-    packages.x86_64-linux.bpi-r4 = let
-      pkgs = nixpkgs.legacyPackages.x86_64-linux;
+  }: let
+    # All systems for formatter support
+    allSystems = ["x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin"];
+    forAllSystems = nixpkgs.lib.genAttrs allSystems;
+
+    # Build systems (OpenWrt ImageBuilder only supports x86_64-linux)
+    buildSystems = ["x86_64-linux"];
+    forBuildSystems = nixpkgs.lib.genAttrs buildSystems;
+  in {
+    packages = forBuildSystems (system: let
+      pkgs = nixpkgs.legacyPackages.${system};
       profiles = openwrt-imagebuilder.lib.profiles {inherit pkgs;};
 
       config =
@@ -70,7 +78,14 @@
             EOF
           '';
         };
-    in
-      openwrt-imagebuilder.lib.build config;
+    in {
+      bpi-r4 = openwrt-imagebuilder.lib.build config;
+    });
+
+    # Formatter available on all systems
+    formatter = forAllSystems (
+      system:
+        nixpkgs.legacyPackages.${system}.alejandra
+    );
   };
 }
