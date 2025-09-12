@@ -7,6 +7,7 @@
   outputs = {
     nixpkgs,
     openwrt-imagebuilder,
+    ...
   }: {
     packages.x86_64-linux.bpi-r4 = let
       pkgs = nixpkgs.legacyPackages.x86_64-linux;
