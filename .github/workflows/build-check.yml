@@ -42,9 +42,23 @@ jobs:
           test -f result/*-sdcard.img.gz || echo "Warning: sdcard.img.gz not found"
           test -f result/sha256sums || echo "Warning: sha256sums not found"
 
+      - name: Extract OpenWrt version
+        run: |
+          # Extract version from the sysupgrade filename
+          if ls result/*-sysupgrade.itb 1> /dev/null 2>&1; then
+            SYSUPGRADE_FILE=$(ls result/*-sysupgrade.itb | head -1)
+            # Extract version (e.g., "24.10.2" from "openwrt-24.10.2-mediatek-filogic-bananapi_bpi-r4-squashfs-sysupgrade.itb")
+            OPENWRT_VERSION=$(basename "$SYSUPGRADE_FILE" | sed -n 's/openwrt-\([^-]*\)-.*/\1/p')
+            echo "OPENWRT_VERSION=$OPENWRT_VERSION" >> $GITHUB_ENV
+            echo "Detected OpenWrt version: $OPENWRT_VERSION"
+          else
+            echo "OPENWRT_VERSION=unknown" >> $GITHUB_ENV
+            echo "Could not detect OpenWrt version"
+          fi
+
       - name: Upload build artifacts for debugging
         uses: actions/upload-artifact@v4
         with:
-          name: openwrt-bpi-r4-check-${{ github.run_number }}
+          name: openwrt-${{ env.OPENWRT_VERSION }}-bpi-r4-check-${{ github.run_number }}
           path: result/
           retention-days: 7

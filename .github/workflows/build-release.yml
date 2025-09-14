@@ -35,7 +35,30 @@ jobs:
       - name: Build OpenWrt image
         run: nix build .#bpi-r4 --print-build-logs
 
+      - name: Extract OpenWrt version
+        run: |
+          # Extract version from the sysupgrade filename
+          if ls result/*-sysupgrade.itb 1> /dev/null 2>&1; then
+            SYSUPGRADE_FILE=$(ls result/*-sysupgrade.itb | head -1)
+            # Extract version (e.g., "24.10.2" from "openwrt-24.10.2-mediatek-filogic-bananapi_bpi-r4-squashfs-sysupgrade.itb")
+            OPENWRT_VERSION=$(basename "$SYSUPGRADE_FILE" | sed -n 's/openwrt-\([^-]*\)-.*/\1/p')
+            echo "OPENWRT_VERSION=$OPENWRT_VERSION" >> $GITHUB_ENV
+            echo "Detected OpenWrt version: $OPENWRT_VERSION"
+          else
+            echo "OPENWRT_VERSION=unknown" >> $GITHUB_ENV
+            echo "Could not detect OpenWrt version"
+          fi
+
+      - name: Upload build artifacts
+        if: github.event.inputs.upload-artifacts == 'true' || github.event_name == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-${{ env.OPENWRT_VERSION }}-bpi-r4-release-${{ github.run_number }}
+          path: result/
+          retention-days: 90
+
       - name: Upload to release
+        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: |
@@ -45,6 +68,5 @@ jobs:
             result/*-bl31-uboot.fip
             result/sha256sums
             result/*.manifest
-            result/build-info.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
