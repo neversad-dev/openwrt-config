@@ -35,14 +35,6 @@ jobs:
       - name: Build OpenWrt image
         run: nix build .#bpi-r4 --print-build-logs
 
-      - name: Generate build info
-        run: |
-          echo "Build completed at: $(date)" > result/build-info.txt
-          echo "Git commit: ${{ github.sha }}" >> result/build-info.txt
-          echo "Git ref: ${{ github.ref }}" >> result/build-info.txt
-          echo "Workflow: Build Release" >> result/build-info.txt
-          ls -la result/ >> result/build-info.txt
-
       - name: Upload build artifacts
         if: github.event.inputs.upload-artifacts == 'true' || github.event_name == 'release'
         uses: actions/upload-artifact@v4

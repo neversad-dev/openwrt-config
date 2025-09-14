@@ -42,14 +42,6 @@ jobs:
           test -f result/*-sdcard.img.gz || echo "Warning: sdcard.img.gz not found"
           test -f result/sha256sums || echo "Warning: sha256sums not found"
 
-      - name: Generate build info
-        run: |
-          echo "Build completed at: $(date)" > result/build-info.txt
-          echo "Git commit: ${{ github.sha }}" >> result/build-info.txt
-          echo "Git ref: ${{ github.ref }}" >> result/build-info.txt
-          echo "Workflow: Build Check" >> result/build-info.txt
-          ls -la result/ >> result/build-info.txt
-
       - name: Upload build artifacts for debugging
         uses: actions/upload-artifact@v4
         with:
