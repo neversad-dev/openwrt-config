@@ -1,0 +1,66 @@
+name: Build Release
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+    inputs:
+      upload-artifacts:
+        description: "Upload artifacts as workflow artifacts"
+        required: false
+        type: boolean
+        default: true
+
+jobs:
+  build-release:
+    name: Build and Release OpenWrt Image
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v16
+        with:
+          name: nix-community
+          skipPush: true
+
+      - name: Build OpenWrt image
+        run: nix build .#bpi-r4 --print-build-logs
+
+      - name: Generate build info
+        run: |
+          echo "Build completed at: $(date)" > result/build-info.txt
+          echo "Git commit: ${{ github.sha }}" >> result/build-info.txt
+          echo "Git ref: ${{ github.ref }}" >> result/build-info.txt
+          echo "Workflow: Build Release" >> result/build-info.txt
+          ls -la result/ >> result/build-info.txt
+
+      - name: Upload build artifacts
+        if: github.event.inputs.upload-artifacts == 'true' || github.event_name == 'release'
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-bpi-r4-release-${{ github.run_number }}
+          path: result/
+
+      - name: Upload to release
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            result/*-sysupgrade.itb
+            result/*-sdcard.img.gz
+            result/*-preloader.bin
+            result/*-bl31-uboot.fip
+            result/sha256sums
+            result/*.manifest
+            result/build-info.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

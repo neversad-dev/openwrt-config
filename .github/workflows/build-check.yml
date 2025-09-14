@@ -1,0 +1,58 @@
+name: Build Check
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install Nix
+        uses: cachix/install-nix-action@v31
+        with:
+          nix_path: nixpkgs=channel:nixos-unstable
+          extra_nix_config: |
+            experimental-features = nix-command flakes
+      
+      - name: Setup Cachix
+        uses: cachix/cachix-action@v16
+        with:
+          name: nix-community
+          skipPush: true
+
+      - name: Check formatting
+        run: nix fmt . --accept-flake-config -- --check
+
+      - name: Build OpenWrt image
+        run: nix build .#bpi-r4 --print-build-logs
+
+      - name: Verify build outputs
+        run: |
+          echo "Build completed successfully!"
+          ls -la result/
+          echo "Checking for required files..."
+          test -f result/*-sysupgrade.itb || echo "Warning: sysupgrade.itb not found"
+          test -f result/*-sdcard.img.gz || echo "Warning: sdcard.img.gz not found"
+          test -f result/sha256sums || echo "Warning: sha256sums not found"
+
+      - name: Generate build info
+        run: |
+          echo "Build completed at: $(date)" > result/build-info.txt
+          echo "Git commit: ${{ github.sha }}" >> result/build-info.txt
+          echo "Git ref: ${{ github.ref }}" >> result/build-info.txt
+          echo "Workflow: Build Check" >> result/build-info.txt
+          ls -la result/ >> result/build-info.txt
+
+      - name: Upload build artifacts for debugging
+        uses: actions/upload-artifact@v4
+        with:
+          name: openwrt-bpi-r4-check-${{ github.run_number }}
+          path: result/
+          retention-days: 7
