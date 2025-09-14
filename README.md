@@ -1,5 +1,12 @@
 # OpenWrt BPI-R4 Custom Image
 
+[![Built with Nix](https://img.shields.io/badge/Built_With-Nix-5277C3.svg?logo=nixos&labelColor=73C3D5)](https://nixos.org)
+[![OpenWrt](https://img.shields.io/badge/OpenWrt-00B5E2?logo=openwrt&logoColor=white)](https://openwrt.org)
+[![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)](https://www.linux.org/)
+[![Build Check](https://img.shields.io/github/actions/workflow/status/neversad-dev/openwrt-config/build-check.yml?branch=main&logo=github-actions&logoColor=white&label=build%20check)](https://github.com/neversad-dev/openwrt-config/actions/workflows/build-check.yml)
+[![MIT License](https://img.shields.io/badge/License-MIT-green.svg)](https://choosealicense.com/licenses/mit/)
+[![Hardware: BPI-R4](https://img.shields.io/badge/Hardware-BPI--R4-orange.svg)](https://openwrt.org/toh/sinovoip/bananapi_bpi-r4)
+
 Custom OpenWrt firmware build for Banana Pi R4 router with personalized configuration built in.
 
 ## What This Repository Does
