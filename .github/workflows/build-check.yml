@@ -20,7 +20,7 @@ jobs:
           nix_path: nixpkgs=channel:nixos-unstable
           extra_nix_config: |
             experimental-features = nix-command flakes
-      
+
       - name: Setup Cachix
         uses: cachix/cachix-action@v16
         with:
@@ -46,5 +46,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: openwrt-bpi-r4-check-${{ github.run_number }}
-          path: result/
+          path: result/*
           retention-days: 7

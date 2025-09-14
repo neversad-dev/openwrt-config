@@ -35,15 +35,7 @@ jobs:
       - name: Build OpenWrt image
         run: nix build .#bpi-r4 --print-build-logs
 
-      - name: Upload build artifacts
-        if: github.event.inputs.upload-artifacts == 'true' || github.event_name == 'release'
-        uses: actions/upload-artifact@v4
-        with:
-          name: openwrt-bpi-r4-release-${{ github.run_number }}
-          path: result/
-
       - name: Upload to release
-        if: github.event_name == 'release'
         uses: softprops/action-gh-release@v2
         with:
           files: |
