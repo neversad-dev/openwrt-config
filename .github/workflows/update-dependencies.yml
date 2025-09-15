@@ -2,7 +2,6 @@ name: Update Dependencies
 
 on:
   schedule:
-    # Run weekly on Sundays at 1 AM UTC (before nix-config updates)
     - cron: '00 9 * * *' # runs daily at 9:00 (an hour after nix-openwrt-imagebuilder updates)
   workflow_dispatch:
     inputs:
